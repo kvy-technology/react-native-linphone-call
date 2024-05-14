@@ -253,7 +253,7 @@ class Sip: RCTEventEmitter {
             
             // We can now configure it
             // Here we ask for no encryption but we could ask for ZRTP/SRTP/DTLS
-            params.mediaEncryption = MediaEncryption.None
+            params.mediaEncryption = MediaEncryption.SRTP
             // If we wanted to start the call with video directly
             //params.videoEnabled = true
             
