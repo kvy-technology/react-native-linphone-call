@@ -12,6 +12,27 @@ class Sip: RCTEventEmitter {
     private var loudMic: AudioDevice?
     private var loudSpeaker: AudioDevice?
     private var microphone: AudioDevice?
+
+     // UPDATED - New method
+    @objc(setUpVideoView:withRejecter:)
+    func setUpVideoView(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        NSLog("Trying to setup capture/video view")
+
+        if(RemoteVideoSurface.nativeVideoWindow != nil) {
+            let enableVideo: UInt8 = 1
+
+            linphone_core_enable_video_capture(mCore.getCobject, enableVideo);
+            linphone_core_enable_video_display(mCore.getCobject, enableVideo)
+        
+            // Set native window
+            mCore.nativeVideoWindow = RemoteVideoSurface.nativeVideoWindow
+
+            resolve(true)
+        }
+        else {
+            reject("Setup video view error", "Can not setup view", nil)
+        }
+    }
     
     @objc func delete() {
         // To completely remove an Account
