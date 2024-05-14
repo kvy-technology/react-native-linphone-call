@@ -255,7 +255,7 @@ class Sip: RCTEventEmitter {
             // Here we ask for no encryption but we could ask for ZRTP/SRTP/DTLS
             params.mediaEncryption = MediaEncryption.SRTP
             // If we wanted to start the call with video directly
-            //params.videoEnabled = true
+            params.videoEnabled = true
             
             // Finally we start the call
             let _ = mCore.inviteAddressWithParams(addr: remoteAddress, params: params)
