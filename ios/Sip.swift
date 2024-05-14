@@ -12,6 +12,27 @@ class Sip: RCTEventEmitter {
     private var loudMic: AudioDevice?
     private var loudSpeaker: AudioDevice?
     private var microphone: AudioDevice?
+
+     // UPDATED - New method
+    @objc(setUpVideoView:withRejecter:)
+    func setUpVideoView(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        NSLog("Trying to setup capture/video view")
+
+        if(RemoteVideoSurface.nativeVideoWindow != nil) {
+            let enableVideo: UInt8 = 1
+
+            linphone_core_enable_video_capture(mCore.getCobject, enableVideo);
+            linphone_core_enable_video_display(mCore.getCobject, enableVideo)
+        
+            // Set native window
+            mCore.nativeVideoWindow = RemoteVideoSurface.nativeVideoWindow
+
+            resolve(true)
+        }
+        else {
+            reject("Setup video view error", "Can not setup view", nil)
+        }
+    }
     
     @objc func delete() {
         // To completely remove an Account
@@ -95,7 +116,7 @@ class Sip: RCTEventEmitter {
     @objc(login:withPassword:withDomain:withResolver:withRejecter:)
     func login(username: String, password: String, domain: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         do {
-            let transport = TransportType.Tls
+            let transport = TransportType.Udp
             
             // To configure a SIP account, we need an Account object and an AuthInfo object
             // The first one is how to connect to the proxy server, the second one stores the credentials
@@ -232,9 +253,9 @@ class Sip: RCTEventEmitter {
             
             // We can now configure it
             // Here we ask for no encryption but we could ask for ZRTP/SRTP/DTLS
-            params.mediaEncryption = MediaEncryption.None
+            params.mediaEncryption = MediaEncryption.SRTP
             // If we wanted to start the call with video directly
-            //params.videoEnabled = true
+            params.videoEnabled = true
             
             // Finally we start the call
             let _ = mCore.inviteAddressWithParams(addr: remoteAddress, params: params)

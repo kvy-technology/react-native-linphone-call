@@ -43,4 +43,7 @@ RCT_EXTERN_METHOD(sendDtmf(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(toggleMute:(RCTPromiseResolveBlock)resolve
                   withRejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(setUpVideoView:(RCTPromiseResolveBlock)resolve
+                  withRejecter:(RCTPromiseRejectBlock)reject)
+
 @end
