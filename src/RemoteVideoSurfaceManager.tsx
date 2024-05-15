@@ -13,8 +13,8 @@ export const RemoteVideoSurfaceView = (props: Props) => {
   const waitVideoView = async () => {
     let videoViewReady = false;
     while (!videoViewReady) {
-      videoViewReady = await setUpVideoView().catch(() => false);
       await new Promise((resolve) => setTimeout(resolve, 1000));
+      videoViewReady = await setUpVideoView().catch(() => false);
     }
   };
 
