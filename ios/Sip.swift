@@ -13,6 +13,11 @@ class Sip: RCTEventEmitter {
     private var loudSpeaker: AudioDevice?
     private var microphone: AudioDevice?
 
+    @objc
+    override static func requiresMainQueueSetup() -> Bool {
+        return true
+    }
+
      // UPDATED - New method
     @objc(setUpVideoView:withRejecter:)
     func setUpVideoView(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
