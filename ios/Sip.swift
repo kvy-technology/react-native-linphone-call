@@ -54,70 +54,95 @@ class Sip: RCTEventEmitter {
     @objc func sendEvent( eventName: String ) {
         self.sendEvent(withName:eventName, body:"");
     }
-    
+        
     @objc(initialise:withRejecter:)
-    func initialise(resolve:RCTPromiseResolveBlock,reject:RCTPromiseRejectBlock) {
+    func initialise(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         do {
             LoggingService.Instance.logLevel = LogLevel.Debug
             
-            try? mCore = Factory.Instance.createCore(configPath: "", factoryConfigPath: "", systemContext: nil)
-            try? mCore.start()
+            mCore = try Factory.Instance.createCore(configPath: "", factoryConfigPath: "", systemContext: nil)
+            try mCore.start()
             
             // Create a Core listener to listen for the callback we need
             // In this case, we want to know about the account registration status
             mRegistrationDelegate = CoreDelegateStub(
-                onCallStateChanged: {(
-                  core: Core,
-                  call: Call,
-                  state: Call.State?,
-                  message: String
-                ) in
-                  switch (state) {
-                  case .IncomingReceived:
-                      // Immediately hang up when we receive a call. There's nothing inherently wrong with this
-                      // but we don't need it right now, so better to leave it deactivated.
-                      try! call.terminate()
-                   case .OutgoingInit:
-                      // First state an outgoing call will go through
-                      self.sendEvent(eventName: "ConnectionRequested")
-                case .OutgoingProgress:
-                      // First state an outgoing call will go through
-                      self.sendEvent(eventName: "CallRequested")
-                  case .OutgoingRinging:
-                      // Once remote accepts, ringing will commence (180 response)
-                      self.sendEvent(eventName: "CallRinging")
-                case .Connected:
-                      self.sendEvent(eventName: "CallConnected")
-                case .StreamsRunning:
-                      // This state indicates the call is active.
-                      // You may reach this state multiple times, for example after a pause/resume
-                      // or after the ICE negotiation completes
-                      // Wait for the call to be connected before allowing a call update
-                      self.sendEvent(eventName: "CallStreamsRunning")
-                case .Paused:
-                      self.sendEvent(eventName: "CallPaused")
-                case .PausedByRemote:
-                      self.sendEvent(eventName: "CallPausedByRemote")
-                  case .Updating:
-                      // When we request a call update, for example when toggling video
-                      self.sendEvent(eventName: "CallUpdating")
-                  case .UpdatedByRemote:
-                      self.sendEvent(eventName: "CallUpdatedByRemote")
-                  case .Released:
-                      self.sendEvent(eventName: "CallReleased")
-                  case .Error:
-                      self.sendEvent(eventName: "CallError")
-                default:
-                      NSLog("")
-                  }
+                onCallStateChanged: { (core: Core, call: Call, state: Call.State?, message: String) in
+                    guard let state = state else { return }
+                    
+                    do {
+                        switch state {
+                        case .IncomingReceived:
+                            let params = try core.createCallParams(call: call)
+                            params.videoEnabled = true
+
+                            // RecvOnly: Only receive video
+                            // SendOnly: Only send video
+                            // SendRecv: Receive and send video
+                            params.videoDirection = .RecvOnly
+
+                            try call.acceptWithParams(params: params)
+                            
+                        case .OutgoingInit:
+                            self.sendEvent(eventName: "ConnectionRequested")
+                            
+                        case .OutgoingProgress:
+                            self.sendEvent(eventName: "CallRequested")
+                            
+                        case .OutgoingRinging:
+                            self.sendEvent(eventName: "CallRinging")
+                            
+                        case .Connected:
+                            self.sendEvent(eventName: "CallConnected")
+                            
+                        case .StreamsRunning:
+                            self.sendEvent(eventName: "CallStreamsRunning")
+
+                        case .Paused:
+                            self.sendEvent(eventName: "CallPaused")
+                            
+                        case .PausedByRemote:
+                            self.sendEvent(eventName: "CallPausedByRemote")
+                            
+                        case .Updating:
+                            self.sendEvent(eventName: "CallUpdating")
+                            
+                        case .UpdatedByRemote:
+                            self.sendEvent(eventName: "CallUpdatedByRemote")
+                            
+                        case .Released:
+                            self.sendEvent(eventName: "CallReleased")
+                            
+                        case .Error:
+                            NSLog("Call Error: \(message)")
+                            self.sendEvent(eventName: "CallError")
+                            
+                        default:
+                            NSLog("Unhandled call state: \(String(describing: state))")
+                        }
+                    } catch {
+                        NSLog("Error handling call state for \(state): \(error.localizedDescription)")
+                    }
                 },
                 onAudioDevicesListUpdated: { (core: Core) in
                     self.sendEvent(eventName: "AudioDevicesChanged")
-                })
+                }
+            )
+            
             mCore.addDelegate(delegate: mRegistrationDelegate)
+
+            // let videoActivationPolicy = try Factory.Instance.createVideoActivationPolicy()
+            // Enable video call for outgoing call
+            // videoActivationPolicy.automaticallyInitiate = true
+            // Enable video call for receive call
+            // videoActivationPolicy.automaticallyAccept = true
+            // mCore.videoActivationPolicy = videoActivationPolicy
+         
             resolve(true)
-        }}
-    
+        } catch {
+            reject("Initialization Failure", "Failed to initialize core", error)
+        }
+    }
+
     @objc(login:withPassword:withDomain:withResolver:withRejecter:)
     func login(username: String, password: String, domain: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         do {
@@ -277,7 +302,7 @@ class Sip: RCTEventEmitter {
             mCore.inputAudioDevice = mic
         }
         
-        if let speaker = earpiece {
+        if let speaker = mCore.defaultOutputAudioDevice {
             mCore.outputAudioDevice = speaker
         }
         
@@ -317,7 +342,7 @@ class Sip: RCTEventEmitter {
         }
         
         let options: NSDictionary = [
-            "phone": earpiece != nil && microphone != nil,
+            "phone": microphone != nil,
             "bluetooth": bluetoothMic != nil || bluetoothSpeaker != nil,
             "loudspeaker": loudSpeaker != nil
         ]

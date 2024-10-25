@@ -183,12 +183,18 @@ export function useAudioDevices(): [
   return [{ current, options }, switchAudio];
 }
 
-export function useMicrophone(): [boolean, () => Promise<boolean>] {
+export function useMicrophone(): [boolean, () => Promise<void>] {
   const [micEnabled, setMicEnabled] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     Sip.micEnabled().then(setMicEnabled);
   }, []);
 
-  return [micEnabled, async () => Sip.toggleMute()];
+  const toggle = async () => {
+    const newValue = await Sip.toggleMute()
+
+    setMicEnabled(newValue)
+  }
+
+  return [micEnabled, toggle];
 }

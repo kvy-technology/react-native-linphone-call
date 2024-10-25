@@ -111,10 +111,15 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
           ) {
             when (state) {
               Call.State.IncomingReceived -> {
-                // Immediately hang up when we receive a call. There's nothing inherently wrong with
-                // this
-                // but we don't need it right now, so better to leave it deactivated.
-                call.terminate()
+                val params = core.createCallParams(call)
+                params?.enableVideo(true)
+
+                // RecvOnly: Only receive video
+                // SendOnly: Only send video
+                // SendRecv: Receive and send video
+                params?.setVideoDirection(MediaDirection.RecvOnly)
+
+                call.acceptWithParams(params)
               }
               Call.State.OutgoingInit -> {
                 // First state an outgoing call will go through
@@ -324,9 +329,9 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     if (microphone != null) {
       core.inputAudioDevice = microphone
     }
-
-    if (earpiece != null) {
-      core.outputAudioDevice = earpiece
+    
+    if (core.defaultOutputAudioDevice != null) {
+      core.outputAudioDevice = core.defaultOutputAudioDevice
     }
 
     promise.resolve(true)
@@ -367,7 +372,7 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     }
 
     val options = Arguments.createMap()
-    options.putBoolean("phone", earpiece != null && microphone != null)
+    options.putBoolean("phone", microphone != null)
     options.putBoolean("bluetooth", bluetoothMic != null || bluetoothSpeaker != null)
     options.putBoolean("loudspeaker", loudSpeaker != null)
 
