@@ -12,6 +12,7 @@ class Sip: RCTEventEmitter {
     private var loudMic: AudioDevice?
     private var loudSpeaker: AudioDevice?
     private var microphone: AudioDevice?
+    private var incomingCallData: (core: Core, call: Call, state: Call.State)?
 
     @objc
     override static func requiresMainQueueSetup() -> Bool {
@@ -68,20 +69,14 @@ class Sip: RCTEventEmitter {
             mRegistrationDelegate = CoreDelegateStub(
                 onCallStateChanged: { (core: Core, call: Call, state: Call.State?, message: String) in
                     guard let state = state else { return }
-                    
+                    NSLog("Call state changed to: \(String(describing: state))")
+
                     do {
                         switch state {
                         case .IncomingReceived:
-                            let params = try core.createCallParams(call: call)
-                            params.videoEnabled = true
+                            self.incomingCallData = (core, call, state)
+                            self.sendEvent(eventName: "CallRinging")
 
-                            // RecvOnly: Only receive video
-                            // SendOnly: Only send video
-                            // SendRecv: Receive and send video
-                            params.videoDirection = .RecvOnly
-
-                            try call.acceptWithParams(params: params)
-                            
                         case .OutgoingInit:
                             self.sendEvent(eventName: "ConnectionRequested")
                             
@@ -110,6 +105,7 @@ class Sip: RCTEventEmitter {
                             self.sendEvent(eventName: "CallUpdatedByRemote")
                             
                         case .Released:
+                            self.incomingCallData = nil
                             self.sendEvent(eventName: "CallReleased")
                             
                         case .Error:
@@ -190,6 +186,23 @@ class Sip: RCTEventEmitter {
             reject("Login error", "Could not log in", error)
         }
     }
+
+    @objc(acceptCall:withRejecter:)
+    func acceptCall(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        do {
+            if let callData = incomingCallData {
+                let params = try callData.core.createCallParams(call: callData.call)
+                params.videoEnabled = true
+                params.videoDirection = .RecvOnly
+                try callData.call.acceptWithParams(params: params)
+                resolve(true)
+            } else {
+                reject("No call", "No call to accept", nil)
+            }
+        } catch {
+            reject("Accept call failed", error.localizedDescription, error)
+        }
+    }
     
     @objc(bluetoothAudio:withRejecter:)
     func bluetoothAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
@@ -212,21 +225,16 @@ class Sip: RCTEventEmitter {
     @objc(unregister:withRejecter:)
     func unregister(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock)
     {
-        // Here we will disable the registration of our Account
-        if let account = mCore.defaultAccount {
-            
-            let params = account.params
-            // Returned params object is const, so to make changes we first need to clone it
-            let clonedParams = params?.clone()
-            
-            // Now let's make our changes
-            clonedParams?.registerEnabled = false
-            
-            // And apply them
-            account.params = clonedParams
-            mCore.removeAccount(account: account)
-            mCore.clearAllAuthInfo()
+        mCore.clearAccounts()
+        mCore.clearAllAuthInfo()
+        
+        // Stop the core in main queue
+        // If not, we can got SIGNAL ABRT error
+        DispatchQueue.main.async {
+            self.mCore.stop()
         }
+
+        resolve(true)
     }
     
     @objc(hangUp:withRejecter:)

@@ -27,6 +27,14 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
 
   private lateinit var core: Core
 
+  private data class CallData(
+    val core: Core,
+    val call: Call,
+    val state: Call.State
+  )
+
+  private var incomingCallData: CallData? = null
+
   companion object {
     const val TAG = "SipModule"
   }
@@ -95,6 +103,17 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     val factory = Factory.instance()
     factory.setDebugMode(true, "Connected to linphone")
     core = factory.createCore(null, null, context)
+
+    if (core.hasBuiltinEchoCanceller()) {
+      core.enableEchoCancellation(false);
+
+      Log.d(TAG, "Use device cancellation")
+    } else {
+      core.enableEchoCancellation(true);
+
+      Log.d(TAG, "Use software cancellation")
+    }
+
     core.start()
 
     val coreListener =
@@ -111,15 +130,8 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
           ) {
             when (state) {
               Call.State.IncomingReceived -> {
-                val params = core.createCallParams(call)
-                params?.enableVideo(true)
-
-                // RecvOnly: Only receive video
-                // SendOnly: Only send video
-                // SendRecv: Receive and send video
-                params?.setVideoDirection(MediaDirection.RecvOnly)
-
-                call.acceptWithParams(params)
+                incomingCallData = CallData(core, call, state)
+                sendEvent("CallRinging")
               }
               Call.State.OutgoingInit -> {
                 // First state an outgoing call will go through
@@ -160,6 +172,7 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
                 sendEvent("CallUpdatedByRemote")
               }
               Call.State.Released -> {
+                incomingCallData = null
                 sendEvent("CallReleased")
               }
               Call.State.Error -> {
@@ -266,6 +279,24 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
         }
         else -> {}
       }
+    }
+  }
+
+  @ReactMethod
+  fun acceptCall(promise: Promise) {
+    try {
+      val callData = incomingCallData
+      if (callData != null) {
+        val params = callData.core.createCallParams(callData.call)
+        params?.enableVideo(true)
+        params?.videoDirection = MediaDirection.RecvOnly
+        callData.call.acceptWithParams(params)
+        promise.resolve(true)
+      } else {
+        promise.reject("No call", "No call to accept")
+      }
+    } catch (e: Exception) {
+      promise.reject("Accept call failed", e.message, e)
     }
   }
 
@@ -428,17 +459,9 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
 
   @ReactMethod
   fun unregister(promise: Promise) {
-    // Here we will disable the registration of our Account
-    val account = core.defaultAccount
-    account ?: return
-
-    // Returned params object is const, so to make changes we first need to clone it
-    val params = account.params.clone()
-
-    params.registerEnabled = false
-    account.params = params
-    core.removeAccount(account)
+    core.clearAccounts()
     core.clearAllAuthInfo()
+    core.stop()
 
     promise.resolve(true)
   }

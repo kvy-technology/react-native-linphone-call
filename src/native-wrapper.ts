@@ -60,6 +60,11 @@ export function login(
   return Sip.login(username, password, domain);
 }
 
+export function acceptCall(
+): Promise<void> {
+  return Sip.acceptCall();
+}
+
 export type DtmfChar =
   | '0'
   | '1'
