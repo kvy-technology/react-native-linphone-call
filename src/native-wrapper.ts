@@ -60,6 +60,30 @@ export function login(
   return Sip.login(username, password, domain);
 }
 
+export function acceptCall(
+): Promise<void> {
+  return Sip.acceptCall();
+}
+
+export function initialise(
+): Promise<void> {
+  return Sip.initialise();
+}
+
+export function unregister(
+): Promise<void> {
+  return Sip.unregister();
+}
+
+export function hangup(
+): Promise<void> {
+  return Sip.hangUp();
+}
+
+export function hasActiveCall(): Promise<boolean> {
+  return Sip.hasActiveCall();
+}
+
 export type DtmfChar =
   | '0'
   | '1'
@@ -183,12 +207,18 @@ export function useAudioDevices(): [
   return [{ current, options }, switchAudio];
 }
 
-export function useMicrophone(): [boolean, () => Promise<boolean>] {
+export function useMicrophone(): [boolean, () => Promise<void>] {
   const [micEnabled, setMicEnabled] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     Sip.micEnabled().then(setMicEnabled);
   }, []);
 
-  return [micEnabled, async () => Sip.toggleMute()];
+  const toggle = async () => {
+    const newValue = await Sip.toggleMute()
+
+    setMicEnabled(newValue)
+  }
+
+  return [micEnabled, toggle];
 }

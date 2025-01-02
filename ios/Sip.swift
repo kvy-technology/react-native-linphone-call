@@ -12,6 +12,7 @@ class Sip: RCTEventEmitter {
     private var loudMic: AudioDevice?
     private var loudSpeaker: AudioDevice?
     private var microphone: AudioDevice?
+    private var incomingCallData: (core: Core, call: Call, state: Call.State)?
 
     @objc
     override static func requiresMainQueueSetup() -> Bool {
@@ -21,7 +22,7 @@ class Sip: RCTEventEmitter {
      // UPDATED - New method
     @objc(setUpVideoView:withRejecter:)
     func setUpVideoView(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
-        NSLog("Trying to setup capture/video view")
+        NSLog("[SIP] Trying to setup capture/video view")
 
         if(RemoteVideoSurface.nativeVideoWindow != nil) {
             let enableVideo: UInt8 = 1
@@ -54,70 +55,92 @@ class Sip: RCTEventEmitter {
     @objc func sendEvent( eventName: String ) {
         self.sendEvent(withName:eventName, body:"");
     }
-    
+        
     @objc(initialise:withRejecter:)
-    func initialise(resolve:RCTPromiseResolveBlock,reject:RCTPromiseRejectBlock) {
+    func initialise(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         do {
             LoggingService.Instance.logLevel = LogLevel.Debug
             
-            try? mCore = Factory.Instance.createCore(configPath: "", factoryConfigPath: "", systemContext: nil)
-            try? mCore.start()
+            mCore = try Factory.Instance.createCore(configPath: "", factoryConfigPath: "", systemContext: nil)
+            try mCore.start()
             
             // Create a Core listener to listen for the callback we need
             // In this case, we want to know about the account registration status
             mRegistrationDelegate = CoreDelegateStub(
-                onCallStateChanged: {(
-                  core: Core,
-                  call: Call,
-                  state: Call.State?,
-                  message: String
-                ) in
-                  switch (state) {
-                  case .IncomingReceived:
-                      // Immediately hang up when we receive a call. There's nothing inherently wrong with this
-                      // but we don't need it right now, so better to leave it deactivated.
-                      try! call.terminate()
-                   case .OutgoingInit:
-                      // First state an outgoing call will go through
-                      self.sendEvent(eventName: "ConnectionRequested")
-                case .OutgoingProgress:
-                      // First state an outgoing call will go through
-                      self.sendEvent(eventName: "CallRequested")
-                  case .OutgoingRinging:
-                      // Once remote accepts, ringing will commence (180 response)
-                      self.sendEvent(eventName: "CallRinging")
-                case .Connected:
-                      self.sendEvent(eventName: "CallConnected")
-                case .StreamsRunning:
-                      // This state indicates the call is active.
-                      // You may reach this state multiple times, for example after a pause/resume
-                      // or after the ICE negotiation completes
-                      // Wait for the call to be connected before allowing a call update
-                      self.sendEvent(eventName: "CallStreamsRunning")
-                case .Paused:
-                      self.sendEvent(eventName: "CallPaused")
-                case .PausedByRemote:
-                      self.sendEvent(eventName: "CallPausedByRemote")
-                  case .Updating:
-                      // When we request a call update, for example when toggling video
-                      self.sendEvent(eventName: "CallUpdating")
-                  case .UpdatedByRemote:
-                      self.sendEvent(eventName: "CallUpdatedByRemote")
-                  case .Released:
-                      self.sendEvent(eventName: "CallReleased")
-                  case .Error:
-                      self.sendEvent(eventName: "CallError")
-                default:
-                      NSLog("")
-                  }
+                onCallStateChanged: { (core: Core, call: Call, state: Call.State?, message: String) in
+                    guard let state = state else { return }
+                    NSLog("[SIP] Call state changed to: \(String(describing: state))")
+
+                    do {
+                        switch state {
+                        case .IncomingReceived:
+                            self.incomingCallData = (core, call, state)
+                            self.sendEvent(eventName: "CallRinging")
+
+                        case .OutgoingInit:
+                            self.sendEvent(eventName: "ConnectionRequested")
+                            
+                        case .OutgoingProgress:
+                            self.sendEvent(eventName: "CallRequested")
+                            
+                        case .OutgoingRinging:
+                            self.sendEvent(eventName: "CallRinging")
+                            
+                        case .Connected:
+                            self.sendEvent(eventName: "CallConnected")
+                            
+                        case .StreamsRunning:
+                            self.sendEvent(eventName: "CallStreamsRunning")
+
+                        case .Paused:
+                            self.sendEvent(eventName: "CallPaused")
+                            
+                        case .PausedByRemote:
+                            self.sendEvent(eventName: "CallPausedByRemote")
+                            
+                        case .Updating:
+                            self.sendEvent(eventName: "CallUpdating")
+                            
+                        case .UpdatedByRemote:
+                            self.sendEvent(eventName: "CallUpdatedByRemote")
+                            
+                        case .Released:
+                            self.incomingCallData = nil
+                            self.sendEvent(eventName: "CallReleased")
+                            
+                        case .Error:
+                            NSLog("[SIP] Call Error: \(message)")
+                            self.sendEvent(eventName: "CallError")
+                            
+                        default:
+                            NSLog("[SIP] Unhandled call state: \(String(describing: state))")
+                        }
+                    } catch {
+                        NSLog("[SIP] Error handling call state for \(state): \(error.localizedDescription)")
+                    }
                 },
                 onAudioDevicesListUpdated: { (core: Core) in
                     self.sendEvent(eventName: "AudioDevicesChanged")
-                })
+                }
+            )
+            
             mCore.addDelegate(delegate: mRegistrationDelegate)
+
+            // let videoActivationPolicy = try Factory.Instance.createVideoActivationPolicy()
+            // Enable video call for outgoing call
+            // videoActivationPolicy.automaticallyInitiate = true
+            // Enable video call for receive call
+            // videoActivationPolicy.automaticallyAccept = true
+            // mCore.videoActivationPolicy = videoActivationPolicy
+
+            NSLog("[SIP] Initialise success")
+         
             resolve(true)
-        }}
-    
+        } catch {
+            reject("Initialization Failure", "Failed to initialize core", error)
+        }
+    }
+
     @objc(login:withPassword:withDomain:withResolver:withRejecter:)
     func login(username: String, password: String, domain: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         do {
@@ -158,25 +181,37 @@ class Sip: RCTEventEmitter {
             
             // Also set the newly added account as default
             mCore.defaultAccount = account
+
+            NSLog("[SIP] Login success")
             
             resolve(nil)
             
         } catch { NSLog(error.localizedDescription)
+            NSLog("[SIP] Login failed")
+
             reject("Login error", "Could not log in", error)
         }
     }
-    
-    @objc(bluetoothAudio:withRejecter:)
-    func bluetoothAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
-        if let mic = self.bluetoothMic {
-            mCore.inputAudioDevice = mic
+
+    @objc(acceptCall:withRejecter:)
+    func acceptCall(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        do {
+            if let callData = incomingCallData {
+                let params = try callData.core.createCallParams(call: callData.call)
+                params.videoEnabled = true
+                params.videoDirection = .RecvOnly
+                try callData.call.acceptWithParams(params: params)
+
+                NSLog("[SIP] Accept success")
+                resolve(true)
+            } else {
+                NSLog("[SIP] No call to accept")
+                reject("No call", "No call to accept", nil)
+            }
+        } catch {
+            NSLog("[SIP] Accept failed")
+            reject("Accept call failed", error.localizedDescription, error)
         }
-        
-        if let speaker = self.bluetoothSpeaker {
-            mCore.outputAudioDevice = speaker
-        }
-        
-        resolve(true)
     }
     
     @objc
@@ -187,26 +222,40 @@ class Sip: RCTEventEmitter {
     @objc(unregister:withRejecter:)
     func unregister(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock)
     {
-        // Here we will disable the registration of our Account
-        if let account = mCore.defaultAccount {
-            
-            let params = account.params
-            // Returned params object is const, so to make changes we first need to clone it
-            let clonedParams = params?.clone()
-            
-            // Now let's make our changes
-            clonedParams?.registerEnabled = false
-            
-            // And apply them
-            account.params = clonedParams
-            mCore.removeAccount(account: account)
-            mCore.clearAllAuthInfo()
+        NSLog("[SIP] Trying to unregister")
+
+        guard let core = mCore else {
+            NSLog("[SIP] Unregister failed")
+            reject("[SIP] No core", "Unregister failed", nil)
+            return
         }
+        
+        mCore.clearAccounts()
+        mCore.clearAllAuthInfo()
+        
+        // Stop the core in main queue
+        // If not, we can got SIGNAL ABRT error
+        if Thread.isMainThread {
+            self.mCore.stop()
+        } else {
+            DispatchQueue.main.sync {
+                self.mCore.stop()
+            }
+        }
+
+        NSLog("[SIP] Unregister success")
+
+        resolve(true)
     }
     
     @objc(hangUp:withRejecter:)
     func hangUp(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
-        NSLog("Trying to hang up")
+        guard let core = mCore else {
+            reject("No core", "Core not initialized", nil)
+            return
+        }
+    
+        NSLog("[SIP] Trying to hang up")
         do {
             if (mCore.callsNb == 0) { return }
             
@@ -215,7 +264,21 @@ class Sip: RCTEventEmitter {
             
             // Terminating a call is quite simple
             if let call = coreCall {
-                try call.terminate()
+                if Thread.isMainThread {
+                    do {
+                        try call.terminate()
+                    } catch {
+                        reject("Decline Error", error.localizedDescription, nil)
+                    }
+                } else {
+                    DispatchQueue.main.sync {
+                        do {
+                            try call.terminate()
+                        } catch {
+                            reject("Decline Error", error.localizedDescription, nil)
+                        }
+                    }
+                }
             } else {
                 reject("No call", "No call to terminate", nil)
             }
@@ -224,21 +287,6 @@ class Sip: RCTEventEmitter {
             reject("Call termination failed", "Call termination failed", error)
             
         }
-    }
-    
-    @objc(loudAudio:withRejecter:)
-    func loudAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
-        if let mic = loudMic {
-            mCore.inputAudioDevice = mic
-        } else if let mic = self.microphone {
-            mCore.inputAudioDevice = mic
-        }
-        
-        if let speaker = loudSpeaker {
-            mCore.outputAudioDevice = speaker
-        }
-        
-        resolve(true)
     }
     
     @objc(micEnabled:withRejecter:)
@@ -277,13 +325,42 @@ class Sip: RCTEventEmitter {
             mCore.inputAudioDevice = mic
         }
         
-        if let speaker = earpiece {
+        if let speaker = mCore.defaultOutputAudioDevice {
             mCore.outputAudioDevice = speaker
         }
         
         resolve(true)
     }
     
+    @objc(bluetoothAudio:withRejecter:)
+    func bluetoothAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        if let mic = self.bluetoothMic {
+            mCore.inputAudioDevice = mic
+        }
+        
+        if let speaker = self.bluetoothSpeaker {
+            mCore.outputAudioDevice = speaker
+        }
+        
+        resolve(true)
+    }
+
+    @objc(loudAudio:withRejecter:)
+    func loudAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        if let mic = loudMic {
+            mCore.inputAudioDevice = mic
+        } else if let mic = self.microphone {
+            mCore.inputAudioDevice = mic
+        }
+        
+        if let speaker = loudSpeaker {
+            mCore.outputAudioDevice = speaker
+        }
+        
+        resolve(true)
+    }
+    
+
     @objc(scanAudioDevices:withRejecter:)
     func scanAudioDevices(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         microphone = nil
@@ -312,12 +389,12 @@ class Sip: RCTEventEmitter {
                     bluetoothMic = audioDevice
                 }
             default:
-                NSLog("Audio device not recognised.")
+                NSLog("[SIP] Audio device not recognised.")
             }
         }
         
         let options: NSDictionary = [
-            "phone": earpiece != nil && microphone != nil,
+            "phone": microphone != nil,
             "bluetooth": bluetoothMic != nil || bluetoothSpeaker != nil,
             "loudspeaker": loudSpeaker != nil
         ]
@@ -351,4 +428,15 @@ class Sip: RCTEventEmitter {
         resolve(mCore.micEnabled)
     }
     
+    @objc(hasActiveCall:withRejecter:)
+    func hasActiveCall(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        guard let core = mCore else {
+            resolve(false)
+            return
+        }
+        
+        // Check both call count and current call state
+        let hasCall = core.callsNb > 0 && core.currentCall != nil
+        resolve(hasCall)
+    }
 }

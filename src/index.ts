@@ -6,4 +6,10 @@ export {
   useAudioDevices,
   useMicrophone,
   DtmfChar,
+  initialise,
+  unregister,
+  login,
+  acceptCall,
+  hangup,
+  hasActiveCall
 } from './native-wrapper';
