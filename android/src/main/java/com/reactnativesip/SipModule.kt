@@ -57,7 +57,7 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
   }
 
   private fun sendEvent(eventName: String) {
-    Log.d(TAG, "Send Event:" + eventName)
+    Log.d(TAG, "[SIP] Send Event:" + eventName)
     reactContext
         .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
         .emit(eventName, null)
@@ -65,7 +65,7 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
 
   @ReactMethod
   fun addListener(eventName: String) {
-    Log.d(TAG, "Added listener: $eventName")
+    Log.d(TAG, "[SIP] Added listener: $eventName")
   }
 
   @ReactMethod
@@ -83,6 +83,11 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
 
   @ReactMethod
   fun hangUp(promise: Promise) {
+    if (!this::core.isInitialized || core == null) {
+      Log.d(TAG, "[SIP] Hangup failed because no core")
+      return
+    }
+    
     Log.i(TAG, "Trying to hang up")
     if (core.callsNb == 0) return
 
@@ -99,6 +104,7 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
 
   @ReactMethod
   fun initialise(promise: Promise) {
+    Log.d(TAG, "[SIP] Starting initialise process")
 
     val factory = Factory.instance()
     factory.setDebugMode(true, "Connected to linphone")
@@ -107,11 +113,11 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     if (core.hasBuiltinEchoCanceller()) {
       core.enableEchoCancellation(false);
 
-      Log.d(TAG, "Use device cancellation")
+      Log.d(TAG, "[SIP] Use device cancellation")
     } else {
       core.enableEchoCancellation(true);
 
-      Log.d(TAG, "Use software cancellation")
+      Log.d(TAG, "[SIP] Use software cancellation")
     }
 
     core.start()
@@ -184,6 +190,9 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
         }
 
     core.addListener(coreListener)
+
+    Log.d(TAG, "[SIP] Initialise success")
+
     promise.resolve(null)
   }
 
@@ -196,9 +205,9 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
 
     // val nativePreviewWindowId = activity!!.findViewById<CaptureTextureView>(R.id.local_preview_video_surface)
 
-    Log.d(TAG, "Remote Video ID:" + nativeVideoWindowId.toString())
+    Log.d(TAG, "[SIP] Remote Video ID:" + nativeVideoWindowId.toString())
 
-    // Log.d(TAG, "Local Video ID:" + nativePreviewWindowId.toString())
+    // Log.d(TAG, "[SIP] Local Video ID:" + nativePreviewWindowId.toString())
 
     core.nativeVideoWindowId = nativeVideoWindowId
     // The local preview is a org.linphone.mediastream.video.capture.CaptureTextureView
@@ -221,64 +230,73 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
 
   @ReactMethod
   fun login(username: String, password: String, domain: String, promise: Promise) {
-    val transportType = TransportType.Udp
+    Log.d(TAG, "[SIP] Starting login process")
+    
+    try {
+      val transportType = TransportType.Udp
 
-    // To configure a SIP account, we need an Account object and an AuthInfo object
-    // The first one is how to connect to the proxy server, the second one stores the credentials
+      // To configure a SIP account, we need an Account object and an AuthInfo object
+      // The first one is how to connect to the proxy server, the second one stores the credentials
 
-    // The auth info can be created from the Factory as it's only a data class
-    // userID is set to null as it's the same as the username in our case
-    // ha1 is set to null as we are using the clear text password. Upon first register, the hash
-    // will be computed automatically.
-    // The realm will be determined automatically from the first register, as well as the algorithm
-    val authInfo =
-        Factory.instance().createAuthInfo(username, null, password, null, null, domain, null)
+      // The auth info can be created from the Factory as it's only a data class
+      // userID is set to null as it's the same as the username in our case
+      // ha1 is set to null as we are using the clear text password. Upon first register, the hash
+      // will be computed automatically.
+      // The realm will be determined automatically from the first register, as well as the algorithm
+      val authInfo =
+          Factory.instance().createAuthInfo(username, null, password, null, null, domain, null)
 
-    // Account object replaces deprecated ProxyConfig object
-    // Account object is configured through an AccountParams object that we can obtain from the Core
-    val accountParams = core.createAccountParams()
+      // Account object replaces deprecated ProxyConfig object
+      // Account object is configured through an AccountParams object that we can obtain from the Core
+      val accountParams = core.createAccountParams()
 
-    // A SIP account is identified by an identity address that we can construct from the username
-    // and domain
-    val identity = Factory.instance().createAddress("sip:$username@$domain")
-    accountParams.identityAddress = identity
+      // A SIP account is identified by an identity address that we can construct from the username
+      // and domain
+      val identity = Factory.instance().createAddress("sip:$username@$domain")
+      accountParams.identityAddress = identity
 
-    // We also need to configure where the proxy server is located
-    val address = Factory.instance().createAddress("sip:$domain")
+      // We also need to configure where the proxy server is located
+      val address = Factory.instance().createAddress("sip:$domain")
 
 
-    // We use the Address object to easily set the transport protocol
-    address?.transport = transportType
-    accountParams.serverAddress = address
-    // And we ensure the account will start the registration process
-    accountParams.registerEnabled = true
+      // We use the Address object to easily set the transport protocol
+      address?.transport = transportType
+      accountParams.serverAddress = address
+      // And we ensure the account will start the registration process
+      accountParams.registerEnabled = true
 
-    // Now that our AccountParams is configured, we can create the Account object
-    val account = core.createAccount(accountParams)
+      // Now that our AccountParams is configured, we can create the Account object
+      val account = core.createAccount(accountParams)
 
-    // Now let's add our objects to the Core
-    core.addAuthInfo(authInfo)
-    core.addAccount(account)
+      // Now let's add our objects to the Core
+      core.addAuthInfo(authInfo)
+      core.addAccount(account)
 
-    core.config.setBool("video", "auto_resize_preview_to_keep_ratio", true)
+      core.config.setBool("video", "auto_resize_preview_to_keep_ratio", true)
 
-    // Also set the newly added account as default
-    core.defaultAccount = account
+      // Also set the newly added account as default
+      core.defaultAccount = account
 
-    // We can also register a callback on the Account object
-    account.addListener { _, state, message ->
-      when (state) {
-        RegistrationState.Ok -> {
-          promise.resolve(true)
+      // We can also register a callback on the Account object
+      account.addListener { _, state, message ->
+        when (state) {
+          RegistrationState.Ok -> {
+            promise.resolve(true)
+          }
+          RegistrationState.Cleared -> {
+            promise.resolve(false)
+          }
+          RegistrationState.Failed -> {
+            promise.reject("Authentication error", message)
+          }
+          else -> {}
         }
-        RegistrationState.Cleared -> {
-          promise.resolve(false)
-        }
-        RegistrationState.Failed -> {
-          promise.reject("Authentication error", message)
-        }
-        else -> {}
       }
+
+      Log.d(TAG, "[SIP] Login Success")
+    } catch (e: Exception) {
+      Log.d(TAG, "[SIP] Login failed" + e)
+      promise.reject("Login failed", e.message)
     }
   }
 
@@ -342,7 +360,7 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
         // All devices will have a "Static picture" fake camera, and we don't want to use it
         if (camera != currentDevice && camera != "StaticImage: Static picture") {
           core.videoDevice = camera
-          Log.d(TAG, "Set camera" + " " + camera.toString())
+          Log.d(TAG, "[SIP] Set camera" + " " + camera.toString())
           break
         }
       }
@@ -370,7 +388,7 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
 
   @ReactMethod
   fun removeListeners(count: Int) {
-    Log.d(TAG, "Removed $count listener(s)")
+    Log.d(TAG, "[SIP] Removed $count listener(s)")
   }
 
   @ReactMethod
@@ -459,10 +477,28 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
 
   @ReactMethod
   fun unregister(promise: Promise) {
-    core.clearAccounts()
-    core.clearAllAuthInfo()
-    core.stop()
+      if (!this::core.isInitialized || core == null) {
+          Log.d("ERROR", "Unregister failed because no core")
+          return
+      }
 
-    promise.resolve(true)
+      core.clearAccounts()
+      core.clearAllAuthInfo()
+      core.stop()
+
+      Log.d(TAG, "[SIP] Unregister success")
+
+      promise.resolve(true)
+  }
+
+  @ReactMethod
+  fun hasActiveCall(promise: Promise) {
+      if (!this::core.isInitialized || core == null) {
+          promise.resolve(false)
+          return
+      }
+      
+      val hasCall = core.callsNb > 0 && core.currentCall != null
+      promise.resolve(hasCall)
   }
 }

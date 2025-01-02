@@ -22,7 +22,7 @@ class Sip: RCTEventEmitter {
      // UPDATED - New method
     @objc(setUpVideoView:withRejecter:)
     func setUpVideoView(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
-        NSLog("Trying to setup capture/video view")
+        NSLog("[SIP] Trying to setup capture/video view")
 
         if(RemoteVideoSurface.nativeVideoWindow != nil) {
             let enableVideo: UInt8 = 1
@@ -69,7 +69,7 @@ class Sip: RCTEventEmitter {
             mRegistrationDelegate = CoreDelegateStub(
                 onCallStateChanged: { (core: Core, call: Call, state: Call.State?, message: String) in
                     guard let state = state else { return }
-                    NSLog("Call state changed to: \(String(describing: state))")
+                    NSLog("[SIP] Call state changed to: \(String(describing: state))")
 
                     do {
                         switch state {
@@ -109,14 +109,14 @@ class Sip: RCTEventEmitter {
                             self.sendEvent(eventName: "CallReleased")
                             
                         case .Error:
-                            NSLog("Call Error: \(message)")
+                            NSLog("[SIP] Call Error: \(message)")
                             self.sendEvent(eventName: "CallError")
                             
                         default:
-                            NSLog("Unhandled call state: \(String(describing: state))")
+                            NSLog("[SIP] Unhandled call state: \(String(describing: state))")
                         }
                     } catch {
-                        NSLog("Error handling call state for \(state): \(error.localizedDescription)")
+                        NSLog("[SIP] Error handling call state for \(state): \(error.localizedDescription)")
                     }
                 },
                 onAudioDevicesListUpdated: { (core: Core) in
@@ -132,6 +132,8 @@ class Sip: RCTEventEmitter {
             // Enable video call for receive call
             // videoActivationPolicy.automaticallyAccept = true
             // mCore.videoActivationPolicy = videoActivationPolicy
+
+            NSLog("[SIP] Initialise success")
          
             resolve(true)
         } catch {
@@ -179,10 +181,14 @@ class Sip: RCTEventEmitter {
             
             // Also set the newly added account as default
             mCore.defaultAccount = account
+
+            NSLog("[SIP] Login success")
             
             resolve(nil)
             
         } catch { NSLog(error.localizedDescription)
+            NSLog("[SIP] Login failed")
+
             reject("Login error", "Could not log in", error)
         }
     }
@@ -195,26 +201,17 @@ class Sip: RCTEventEmitter {
                 params.videoEnabled = true
                 params.videoDirection = .RecvOnly
                 try callData.call.acceptWithParams(params: params)
+
+                NSLog("[SIP] Accept success")
                 resolve(true)
             } else {
+                NSLog("[SIP] No call to accept")
                 reject("No call", "No call to accept", nil)
             }
         } catch {
+            NSLog("[SIP] Accept failed")
             reject("Accept call failed", error.localizedDescription, error)
         }
-    }
-    
-    @objc(bluetoothAudio:withRejecter:)
-    func bluetoothAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
-        if let mic = self.bluetoothMic {
-            mCore.inputAudioDevice = mic
-        }
-        
-        if let speaker = self.bluetoothSpeaker {
-            mCore.outputAudioDevice = speaker
-        }
-        
-        resolve(true)
     }
     
     @objc
@@ -225,21 +222,40 @@ class Sip: RCTEventEmitter {
     @objc(unregister:withRejecter:)
     func unregister(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock)
     {
+        NSLog("[SIP] Trying to unregister")
+
+        guard let core = mCore else {
+            NSLog("[SIP] Unregister failed")
+            reject("[SIP] No core", "Unregister failed", nil)
+            return
+        }
+        
         mCore.clearAccounts()
         mCore.clearAllAuthInfo()
         
         // Stop the core in main queue
         // If not, we can got SIGNAL ABRT error
-        DispatchQueue.main.async {
+        if Thread.isMainThread {
             self.mCore.stop()
+        } else {
+            DispatchQueue.main.sync {
+                self.mCore.stop()
+            }
         }
+
+        NSLog("[SIP] Unregister success")
 
         resolve(true)
     }
     
     @objc(hangUp:withRejecter:)
     func hangUp(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
-        NSLog("Trying to hang up")
+        guard let core = mCore else {
+            reject("No core", "Core not initialized", nil)
+            return
+        }
+    
+        NSLog("[SIP] Trying to hang up")
         do {
             if (mCore.callsNb == 0) { return }
             
@@ -248,7 +264,21 @@ class Sip: RCTEventEmitter {
             
             // Terminating a call is quite simple
             if let call = coreCall {
-                try call.terminate()
+                if Thread.isMainThread {
+                    do {
+                        try call.terminate()
+                    } catch {
+                        reject("Decline Error", error.localizedDescription, nil)
+                    }
+                } else {
+                    DispatchQueue.main.sync {
+                        do {
+                            try call.terminate()
+                        } catch {
+                            reject("Decline Error", error.localizedDescription, nil)
+                        }
+                    }
+                }
             } else {
                 reject("No call", "No call to terminate", nil)
             }
@@ -257,21 +287,6 @@ class Sip: RCTEventEmitter {
             reject("Call termination failed", "Call termination failed", error)
             
         }
-    }
-    
-    @objc(loudAudio:withRejecter:)
-    func loudAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
-        if let mic = loudMic {
-            mCore.inputAudioDevice = mic
-        } else if let mic = self.microphone {
-            mCore.inputAudioDevice = mic
-        }
-        
-        if let speaker = loudSpeaker {
-            mCore.outputAudioDevice = speaker
-        }
-        
-        resolve(true)
     }
     
     @objc(micEnabled:withRejecter:)
@@ -317,6 +332,35 @@ class Sip: RCTEventEmitter {
         resolve(true)
     }
     
+    @objc(bluetoothAudio:withRejecter:)
+    func bluetoothAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        if let mic = self.bluetoothMic {
+            mCore.inputAudioDevice = mic
+        }
+        
+        if let speaker = self.bluetoothSpeaker {
+            mCore.outputAudioDevice = speaker
+        }
+        
+        resolve(true)
+    }
+
+    @objc(loudAudio:withRejecter:)
+    func loudAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        if let mic = loudMic {
+            mCore.inputAudioDevice = mic
+        } else if let mic = self.microphone {
+            mCore.inputAudioDevice = mic
+        }
+        
+        if let speaker = loudSpeaker {
+            mCore.outputAudioDevice = speaker
+        }
+        
+        resolve(true)
+    }
+    
+
     @objc(scanAudioDevices:withRejecter:)
     func scanAudioDevices(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         microphone = nil
@@ -345,7 +389,7 @@ class Sip: RCTEventEmitter {
                     bluetoothMic = audioDevice
                 }
             default:
-                NSLog("Audio device not recognised.")
+                NSLog("[SIP] Audio device not recognised.")
             }
         }
         
@@ -384,4 +428,15 @@ class Sip: RCTEventEmitter {
         resolve(mCore.micEnabled)
     }
     
+    @objc(hasActiveCall:withRejecter:)
+    func hasActiveCall(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        guard let core = mCore else {
+            resolve(false)
+            return
+        }
+        
+        // Check both call count and current call state
+        let hasCall = core.callsNb > 0 && core.currentCall != nil
+        resolve(hasCall)
+    }
 }

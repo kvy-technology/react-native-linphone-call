@@ -16,24 +16,12 @@ interface SIPProviderProps {
   remoteVideoIdRef?: any;
 }
 export function SIPProvider({ children = <></> }: SIPProviderProps) {
-  const [initialized, setInitialized] = React.useState(false);
-
-  React.useEffect(() => {
-    NativeWrapper.Sip.initialise().then(() => setInitialized(true));
-
-    return () => NativeWrapper.Sip.unregister().then(() => setInitialized(false));
-  }, []);
-
   const sipOperations = {
     login: NativeWrapper.login,
     acceptCall: NativeWrapper.acceptCall,
   };
 
-  return initialized ? (
-    <SIPContext.Provider value={sipOperations}>{children}</SIPContext.Provider>
-  ) : (
-    <></>
-  );
+  return <SIPContext.Provider value={sipOperations}>{children}</SIPContext.Provider>
 }
 
 export const useSIP = () => React.useContext(SIPContext);

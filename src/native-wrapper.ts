@@ -65,6 +65,25 @@ export function acceptCall(
   return Sip.acceptCall();
 }
 
+export function initialise(
+): Promise<void> {
+  return Sip.initialise();
+}
+
+export function unregister(
+): Promise<void> {
+  return Sip.unregister();
+}
+
+export function hangup(
+): Promise<void> {
+  return Sip.hangUp();
+}
+
+export function hasActiveCall(): Promise<boolean> {
+  return Sip.hasActiveCall();
+}
+
 export type DtmfChar =
   | '0'
   | '1'
