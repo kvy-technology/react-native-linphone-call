@@ -1,4 +1,5 @@
 import linphonesw
+import AVFoundation
 import React
 
 @objc(Sip)
@@ -17,6 +18,34 @@ class Sip: RCTEventEmitter {
     @objc
     override static func requiresMainQueueSetup() -> Bool {
         return true
+    }
+
+    func configureAudioSessionSpeaker() {
+        let audioSession = AVAudioSession.sharedInstance()
+
+        do {
+            try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth,.defaultToSpeaker])
+            try audioSession.setPreferredSampleRate(48000.0)
+            try audioSession.setPreferredIOBufferDuration(0.02) // Increase buffer duration to 20ms
+            try audioSession.setActive(true)
+            print("Audio session configured with sample rate: \(audioSession.sampleRate) and buffer duration: \(audioSession.ioBufferDuration)")
+        } catch {
+            print("Failed to configure audio session: \(error)")
+        }
+    }
+
+    func configureAudioSession() {
+        let audioSession = AVAudioSession.sharedInstance()
+
+        do {
+            try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth])
+            try audioSession.setPreferredSampleRate(48000.0)
+            try audioSession.setPreferredIOBufferDuration(0.02) // Increase buffer duration to 20ms
+            try audioSession.setActive(true)
+            print("Audio session configured with sample rate: \(audioSession.sampleRate) and buffer duration: \(audioSession.ioBufferDuration)")
+        } catch {
+            print("Failed to configure audio session: \(error)")
+        }
     }
 
      // UPDATED - New method
@@ -319,18 +348,6 @@ class Sip: RCTEventEmitter {
         }
     }
     
-    @objc(phoneAudio:withRejecter:)
-    func phoneAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
-        if let mic = microphone {
-            mCore.inputAudioDevice = mic
-        }
-        
-        if let speaker = mCore.defaultOutputAudioDevice {
-            mCore.outputAudioDevice = speaker
-        }
-        
-        resolve(true)
-    }
     
     @objc(bluetoothAudio:withRejecter:)
     func bluetoothAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
@@ -345,6 +362,16 @@ class Sip: RCTEventEmitter {
         resolve(true)
     }
 
+    @objc(phoneAudio:withRejecter:)
+    func phoneAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        if let mic = microphone {
+            mCore.inputAudioDevice = mic
+        }
+
+        configureAudioSession()
+        resolve(true)
+    }
+
     @objc(loudAudio:withRejecter:)
     func loudAudio(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         if let mic = loudMic {
@@ -352,14 +379,10 @@ class Sip: RCTEventEmitter {
         } else if let mic = self.microphone {
             mCore.inputAudioDevice = mic
         }
-        
-        if let speaker = loudSpeaker {
-            mCore.outputAudioDevice = speaker
-        }
-        
+
+        configureAudioSessionSpeaker()
         resolve(true)
     }
-    
 
     @objc(scanAudioDevices:withRejecter:)
     func scanAudioDevices(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
@@ -377,13 +400,13 @@ class Sip: RCTEventEmitter {
             case .Earpiece:
                 earpiece = audioDevice
             case .Speaker:
-                if (audioDevice.hasCapability(capability: AudioDeviceCapabilities.CapabilityPlay)) {
+                if (audioDevice.hasCapability(capability: AudioDevice.Capabilities.CapabilityPlay)) {
                     loudSpeaker = audioDevice
                 } else {
                     loudMic = audioDevice
                 }
             case .Bluetooth:
-                if (audioDevice.hasCapability(capability: AudioDeviceCapabilities.CapabilityPlay)) {
+                if (audioDevice.hasCapability(capability: AudioDevice.Capabilities.CapabilityPlay)) {
                     bluetoothSpeaker = audioDevice
                 } else {
                     bluetoothMic = audioDevice
