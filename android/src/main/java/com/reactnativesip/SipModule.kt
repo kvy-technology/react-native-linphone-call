@@ -492,13 +492,21 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
   }
 
   @ReactMethod
-  fun hasActiveCall(promise: Promise) {
-      if (!this::core.isInitialized || core == null) {
-          promise.resolve(false)
-          return
+  public void hasActiveCall(Promise promise) {
+      if (mCore == null) {
+          promise.resolve(false);
+          return;
       }
-      
-      val hasCall = core.callsNb > 0 && core.currentCall != null
-      promise.resolve(hasCall)
+
+      Call currentCall = mCore.getCurrentCall();
+
+      if (currentCall != null) {
+          boolean isConnected = currentCall.getState() == Call.State.Connected || 
+                              currentCall.getState() == Call.State.StreamsRunning;
+          promise.resolve(isConnected);
+          return;
+      }
+
+      promise.resolve(false);
   }
 }

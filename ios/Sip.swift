@@ -457,9 +457,15 @@ class Sip: RCTEventEmitter {
             resolve(false)
             return
         }
-        
-        // Check both call count and current call state
-        let hasCall = core.callsNb > 0 && core.currentCall != nil
-        resolve(hasCall)
+
+        if let currentCall = core.currentCall {
+            // Check for connected/active states
+            let isConnected = currentCall.state == .Connected || 
+                            currentCall.state == .StreamsRunning
+            resolve(isConnected)
+            return
+        }
+
+        resolve(false)
     }
 }
