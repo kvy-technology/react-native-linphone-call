@@ -228,7 +228,7 @@ class Sip: RCTEventEmitter {
             if let callData = incomingCallData {
                 let params = try callData.core.createCallParams(call: callData.call)
                 params.videoEnabled = true
-                params.videoDirection = .RecvOnly
+                params.videoDirection = .SendRecv
                 try callData.call.acceptWithParams(params: params)
 
                 NSLog("[SIP] Accept success")
