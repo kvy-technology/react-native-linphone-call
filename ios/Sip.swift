@@ -173,7 +173,7 @@ class Sip: RCTEventEmitter {
     @objc(login:withPassword:withDomain:withResolver:withRejecter:)
     func login(username: String, password: String, domain: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         do {
-            let transport = TransportType.Udp
+            let transport = TransportType.Tcp
             
             // To configure a SIP account, we need an Account object and an AuthInfo object
             // The first one is how to connect to the proxy server, the second one stores the credentials
