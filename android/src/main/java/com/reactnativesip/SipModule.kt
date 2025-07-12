@@ -233,7 +233,7 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     Log.d(TAG, "[SIP] Starting login process")
     
     try {
-      val transportType = TransportType.Udp
+      val transportType = TransportType.Tcp
 
       // To configure a SIP account, we need an Account object and an AuthInfo object
       // The first one is how to connect to the proxy server, the second one stores the credentials
@@ -307,7 +307,7 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
       if (callData != null) {
         val params = callData.core.createCallParams(callData.call)
         params?.enableVideo(true)
-        params?.videoDirection = MediaDirection.RecvOnly
+        params?.videoDirection = MediaDirection.SendRecv
         callData.call.acceptWithParams(params)
         promise.resolve(true)
       } else {
