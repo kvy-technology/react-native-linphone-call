@@ -212,6 +212,8 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     core.nativeVideoWindowId = nativeVideoWindowId
     // The local preview is a org.linphone.mediastream.video.capture.CaptureTextureView
     // which inherits from TextureView and contains code to keep the ratio of the capture video
+    val nativePreviewWindowId = activity!!.findViewById<CaptureTextureView>(R.id.local_preview_video_surface)
+    core.nativePreviewWindowId = nativePreviewWindowId
     // core.nativePreviewWindowId = nativePreviewWindowId
 
 
@@ -219,9 +221,14 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     core.enableVideoDisplay(true)
 
     core.videoActivationPolicy.automaticallyAccept = true
+    core.videoActivationPolicy.automaticallyInitiate = true
 
-    if(nativeVideoWindowId == null){
-      promise.reject("Error", "Video view not found")
+    if(nativeVideoWindowId == null && nativePreviewWindowId == null){
+      promise.reject("Error", "Both remote and local video views not found")
+    } else if(nativeVideoWindowId == null){
+      promise.reject("Error", "Remote video view not found")
+    } else if(nativePreviewWindowId == null){
+      promise.reject("Error", "Local preview video view not found")
     } else {
       promise.resolve(true)
     }
