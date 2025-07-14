@@ -351,7 +351,7 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
       val params = core.createCallParams(null)
       params ?: return // Same for params
 
-      params.mediaEncryption = MediaEncryption.None
+      params.mediaEncryption = MediaEncryption.SRTP
       params.enableVideo(true)
 
       val currentDevice = core.videoDevice
