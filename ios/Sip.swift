@@ -469,7 +469,7 @@ class Sip: RCTEventEmitter {
         resolve(false)
     }
 
-    @objc(setStaticImage:withRejecter:)
+    @objc(setStaticImage:withResolver:withRejecter:)
     func setStaticImage(config: NSDictionary, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         if mCore == nil {
             reject("Core not initialized", "SIP core is not initialized", nil)
@@ -483,19 +483,19 @@ class Sip: RCTEventEmitter {
 
         do {
             // Use Linphone's setStaticPicture method to set custom static image
-            mCore.setStaticPicture(path: imagePath)
+            try mCore.setStaticpicture(newValue: imagePath)
             NSLog("[SIP] Static picture set to: \(imagePath)")
 
             // Configure FPS if provided
-            if let fps = config["fps"] as? Double {
-                mCore.setStaticPictureFps(fps: fps)
+            if let fps = config["fps"] {
+                try mCore.setStaticpicturefps(newValue: Float("\(fps)") ?? 0)
                 NSLog("[SIP] Static picture FPS set to: \(fps)")
             }
 
             // Set the static image device to avoid camera permissions
-            for device in mCore.videoDevices {
+          for device in mCore.videoDevicesList {
                 if device.contains("StaticImage") || device.contains("Static picture") {
-                    mCore.videoDevice = device
+                  try mCore.setVideodevice(newValue: device)
                     NSLog("[SIP] Static image device enabled: \(device)")
                     break
                 }
@@ -518,9 +518,73 @@ class Sip: RCTEventEmitter {
 
         do {
             // Switch back to the first non-static image device (camera)
-            for device in mCore.videoDevices {
+          for device in mCore.videoDevicesList {
                 if !device.contains("StaticImage") && !device.contains("Static picture") {
-                    mCore.videoDevice = device
+                    try mCore.setVideodevice(newValue: device)
+                    NSLog("[SIP] Switched back to camera device: \(device)")
+                    break
+                }
+            }
+
+            resolve(true)
+        } catch {
+            NSLog("[SIP] Failed to clear static image: \(error.localizedDescription)")
+            reject("Clear static image failed", error.localizedDescription, error)
+        }
+    }
+
+    @objc(setStaticImage:withResolver:withRejecter:)
+    func setStaticImage(config: NSDictionary, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        if mCore == nil {
+            reject("Core not initialized", "SIP core is not initialized", nil)
+            return
+        }
+
+        guard let imagePath = config["imagePath"] as? String else {
+            reject("Invalid config", "imagePath is required", nil)
+            return
+        }
+
+        do {
+            // Use Linphone's setStaticPicture method to set custom static image
+            try mCore.setStaticpicture(newValue: imagePath)
+            NSLog("[SIP] Static picture set to: \(imagePath)")
+
+            // Configure FPS if provided
+            if let fps = config["fps"] {
+                try mCore.setStaticpicturefps(newValue: Float("\(fps)") ?? 0)
+                NSLog("[SIP] Static picture FPS set to: \(fps)")
+            }
+
+            // Set the static image device to avoid camera permissions
+          for device in mCore.videoDevicesList {
+                if device.contains("StaticImage") || device.contains("Static picture") {
+                  try mCore.setVideodevice(newValue: device)
+                    NSLog("[SIP] Static image device enabled: \(device)")
+                    break
+                }
+            }
+
+            NSLog("[SIP] Static image enabled with custom picture - no camera permissions needed")
+            resolve(true)
+        } catch {
+            NSLog("[SIP] Failed to set static image: \(error.localizedDescription)")
+            reject("Set static image failed", error.localizedDescription, error)
+        }
+    }
+
+    @objc(clearStaticImage:withRejecter:)
+    func clearStaticImage(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        if mCore == nil {
+            reject("Core not initialized", "SIP core is not initialized", nil)
+            return
+        }
+
+        do {
+            // Switch back to the first non-static image device (camera)
+          for device in mCore.videoDevicesList {
+                if !device.contains("StaticImage") && !device.contains("Static picture") {
+                    try mCore.setVideodevice(newValue: device)
                     NSLog("[SIP] Switched back to camera device: \(device)")
                     break
                 }
