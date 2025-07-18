@@ -53,4 +53,11 @@ RCT_EXTERN_METHOD(setUpVideoView:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(hasActiveCall:(RCTPromiseResolveBlock)resolve
                   withRejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(setStaticImage:(NSDictionary *)config
+                  withResolver:(RCTPromiseResolveBlock)resolve
+                  withRejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(clearStaticImage:(RCTPromiseResolveBlock)resolve
+                  withRejecter:(RCTPromiseRejectBlock)reject)
+
 @end
