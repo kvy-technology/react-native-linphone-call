@@ -99,12 +99,21 @@ export type DtmfChar =
   | '*'
   | '#';
 
+// Add new interfaces for static image support
+export interface StaticImageConfig {
+  imagePath: string; // Path to the static image file (required)
+  fps?: number;      // Optional: frame rate for static picture (default is usually 1 fps)
+}
+
 type SipCall = {
   call: (remoteUri: string) => Promise<void>;
   hangup: () => Promise<void>;
   toggleVideo: () => Promise<void>;
   setUpVideoView: () => Promise<boolean>;
   sendDtmf: (dtmf: DtmfChar) => Promise<void>;
+  // Simplified static image functions
+  setStaticImage: (config: StaticImageConfig) => Promise<boolean>;
+  clearStaticImage: () => Promise<boolean>;
 };
 
 export function useCall(callbacks: Callbacks = {}): SipCall {
@@ -125,6 +134,9 @@ export function useCall(callbacks: Callbacks = {}): SipCall {
     toggleVideo: () => Sip.toggleVideo(),
     setUpVideoView: () => Sip.setUpVideoView(),
     sendDtmf: (dtmf: DtmfChar) => Sip.sendDtmf(dtmf),
+    // Simplified static image functions
+    setStaticImage: (config: StaticImageConfig) => Sip.setStaticImage(config),
+    clearStaticImage: () => Sip.clearStaticImage(),
   };
 }
 
@@ -221,4 +233,40 @@ export function useMicrophone(): [boolean, () => Promise<void>] {
   }
 
   return [micEnabled, toggle];
+}
+
+export function useStaticImage(): [
+  boolean,
+  (config: StaticImageConfig) => Promise<boolean>,
+  () => Promise<boolean>
+] {
+  const [isStaticImageActive, setIsStaticImageActive] = React.useState<boolean>(false);
+
+  const setStaticImage = async (config: StaticImageConfig): Promise<boolean> => {
+    try {
+      const result = await Sip.setStaticImage(config);
+      if (result) {
+        setIsStaticImageActive(true);
+      }
+      return result;
+    } catch (error) {
+      console.error('Failed to set static image:', error);
+      return false;
+    }
+  };
+
+  const clearStaticImage = async (): Promise<boolean> => {
+    try {
+      const result = await Sip.clearStaticImage();
+      if (result) {
+        setIsStaticImageActive(false);
+      }
+      return result;
+    } catch (error) {
+      console.error('Failed to clear static image:', error);
+      return false;
+    }
+  };
+
+  return [isStaticImageActive, setStaticImage, clearStaticImage];
 }

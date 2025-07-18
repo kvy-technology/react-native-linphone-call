@@ -516,4 +516,70 @@ class SipModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
 
     promise.resolve(false)
   }
+
+  @ReactMethod
+  fun setStaticImage(config: ReadableMap, promise: Promise) {
+    if (!this::core.isInitialized || core == null) {
+      promise.reject("Core not initialized", "SIP core is not initialized")
+      return
+    }
+
+    try {
+      val imagePath = config.getString("imagePath")
+      if (imagePath == null) {
+        promise.reject("Invalid config", "imagePath is required")
+        return
+      }
+
+      // Use Linphone's setStaticPicture method to set custom static image
+      core.setStaticPicture(imagePath)
+      Log.d(TAG, "[SIP] Static picture set to: $imagePath")
+
+      // Configure FPS if provided
+      val fps = config.getDouble("fps")
+      if (!fps.isNaN()) {
+        core.setStaticPictureFps(fps.toFloat())
+        Log.d(TAG, "[SIP] Static picture FPS set to: $fps")
+      }
+
+      // Set the static image device to avoid camera permissions
+      for (device in core.videoDevicesList) {
+        if (device.contains("StaticImage") || device.contains("Static picture")) {
+          core.videoDevice = device
+          Log.d(TAG, "[SIP] Static image device enabled: $device")
+          break
+        }
+      }
+
+      Log.d(TAG, "[SIP] Static image enabled with custom picture - no camera permissions needed")
+      promise.resolve(true)
+    } catch (e: Exception) {
+      Log.e(TAG, "[SIP] Failed to set static image: ${e.message}")
+      promise.reject("Set static image failed", e.message, e)
+    }
+  }
+
+  @ReactMethod
+  fun clearStaticImage(promise: Promise) {
+    if (!this::core.isInitialized || core == null) {
+      promise.reject("Core not initialized", "SIP core is not initialized")
+      return
+    }
+
+    try {
+      // Switch back to the first non-static image device (camera)
+      for (device in core.videoDevicesList) {
+        if (!device.contains("StaticImage") && !device.contains("Static picture")) {
+          core.videoDevice = device
+          Log.d(TAG, "[SIP] Switched back to camera device: $device")
+          break
+        }
+      }
+
+      promise.resolve(true)
+    } catch (e: Exception) {
+      Log.e(TAG, "[SIP] Failed to clear static image: ${e.message}")
+      promise.reject("Clear static image failed", e.message, e)
+    }
+  }
 }
